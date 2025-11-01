@@ -1,0 +1,535 @@
+import React, { useState, useEffect } from 'react';
+import { Plus, X, Edit2, Trash2, MessageSquare, User, LogOut, Users } from 'lucide-react';
+
+const ProjectManagementTool = () => {
+  const [currentUser, setCurrentUser] = useState(null);
+  const [users, setUsers] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [showProjectModal, setShowProjectModal] = useState(false);
+  const [showTaskModal, setShowTaskModal] = useState(false);
+  const [showCommentModal, setShowCommentModal] = useState(false);
+  const [selectedTask, setSelectedTask] = useState(null);
+  const [loginForm, setLoginForm] = useState({ username: '', password: '' });
+  const [registerForm, setRegisterForm] = useState({ username: '', password: '', email: '' });
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [projectForm, setProjectForm] = useState({ name: '', description: '' });
+  const [taskForm, setTaskForm] = useState({ title: '', description: '', assignedTo: '' });
+  const [commentText, setCommentText] = useState('');
+
+  const handleRegister = () => {
+    if (users.find(u => u.username === registerForm.username)) {
+      alert('Username already exists');
+      return;
+    }
+    const newUser = {
+      id: Date.now().toString(),
+      username: registerForm.username,
+      password: registerForm.password,
+      email: registerForm.email
+    };
+    setUsers([...users, newUser]);
+    setCurrentUser(newUser);
+    setRegisterForm({ username: '', password: '', email: '' });
+  };
+
+  const handleLogin = () => {
+    const user = users.find(u => u.username === loginForm.username && u.password === loginForm.password);
+    if (user) {
+      setCurrentUser(user);
+      setLoginForm({ username: '', password: '' });
+    } else {
+      alert('Invalid credentials');
+    }
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+  };
+
+  const createProject = () => {
+    if (!projectForm.name || !projectForm.description) return;
+    
+    const newProject = {
+      id: Date.now().toString(),
+      name: projectForm.name,
+      description: projectForm.description,
+      createdBy: currentUser.id,
+      members: [currentUser.id],
+      boards: [
+        { id: '1', name: 'To Do', tasks: [] },
+        { id: '2', name: 'In Progress', tasks: [] },
+        { id: '3', name: 'Done', tasks: [] }
+      ]
+    };
+    setProjects([...projects, newProject]);
+    setShowProjectModal(false);
+    setProjectForm({ name: '', description: '' });
+  };
+
+  const addTask = (boardId) => {
+    if (!taskForm.title || !taskForm.description) return;
+    
+    const updatedProjects = projects.map(p => {
+      if (p.id === selectedProject.id) {
+        return {
+          ...p,
+          boards: p.boards.map(b => {
+            if (b.id === boardId) {
+              return {
+                ...b,
+                tasks: [...b.tasks, {
+                  id: Date.now().toString(),
+                  title: taskForm.title,
+                  description: taskForm.description,
+                  createdBy: currentUser.id,
+                  assignedTo: taskForm.assignedTo || null,
+                  comments: [],
+                  createdAt: new Date().toISOString()
+                }]
+              };
+            }
+            return b;
+          })
+        };
+      }
+      return p;
+    });
+    setProjects(updatedProjects);
+    setSelectedProject(updatedProjects.find(p => p.id === selectedProject.id));
+    setShowTaskModal(false);
+    setTaskForm({ title: '', description: '', assignedTo: '' });
+  };
+
+  const moveTask = (taskId, fromBoardId, toBoardId) => {
+    const updatedProjects = projects.map(p => {
+      if (p.id === selectedProject.id) {
+        let taskToMove;
+        const boards = p.boards.map(b => {
+          if (b.id === fromBoardId) {
+            taskToMove = b.tasks.find(t => t.id === taskId);
+            return { ...b, tasks: b.tasks.filter(t => t.id !== taskId) };
+          }
+          if (b.id === toBoardId && taskToMove) {
+            return { ...b, tasks: [...b.tasks, taskToMove] };
+          }
+          return b;
+        });
+        return { ...p, boards };
+      }
+      return p;
+    });
+    setProjects(updatedProjects);
+    setSelectedProject(updatedProjects.find(p => p.id === selectedProject.id));
+  };
+
+  const addComment = () => {
+    if (!commentText.trim()) return;
+    
+    const updatedProjects = projects.map(p => {
+      if (p.id === selectedProject.id) {
+        return {
+          ...p,
+          boards: p.boards.map(b => {
+            if (b.id === selectedTask.boardId) {
+              return {
+                ...b,
+                tasks: b.tasks.map(t => {
+                  if (t.id === selectedTask.id) {
+                    return {
+                      ...t,
+                      comments: [...t.comments, {
+                        id: Date.now().toString(),
+                        text: commentText,
+                        userId: currentUser.id,
+                        createdAt: new Date().toISOString()
+                      }]
+                    };
+                  }
+                  return t;
+                })
+              };
+            }
+            return b;
+          })
+        };
+      }
+      return p;
+    });
+    setProjects(updatedProjects);
+    const updatedProject = updatedProjects.find(p => p.id === selectedProject.id);
+    setSelectedProject(updatedProject);
+    
+    const updatedBoard = updatedProject.boards.find(b => b.id === selectedTask.boardId);
+    const updatedTask = updatedBoard.tasks.find(t => t.id === selectedTask.id);
+    setSelectedTask({ ...updatedTask, boardId: selectedTask.boardId });
+    setCommentText('');
+  };
+
+  const deleteTask = (taskId, boardId) => {
+    const updatedProjects = projects.map(p => {
+      if (p.id === selectedProject.id) {
+        return {
+          ...p,
+          boards: p.boards.map(b => {
+            if (b.id === boardId) {
+              return { ...b, tasks: b.tasks.filter(t => t.id !== taskId) };
+            }
+            return b;
+          })
+        };
+      }
+      return p;
+    });
+    setProjects(updatedProjects);
+    setSelectedProject(updatedProjects.find(p => p.id === selectedProject.id));
+  };
+
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+        <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-md">
+          <h1 className="text-3xl font-bold text-gray-800 mb-6 text-center">
+            {isRegistering ? 'Register' : 'Login'}
+          </h1>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Username</label>
+              <input
+                type="text"
+                value={isRegistering ? registerForm.username : loginForm.username}
+                onChange={(e) => isRegistering 
+                  ? setRegisterForm({...registerForm, username: e.target.value})
+                  : setLoginForm({...loginForm, username: e.target.value})
+                }
+                onKeyPress={(e) => e.key === 'Enter' && (isRegistering ? handleRegister() : handleLogin())}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            {isRegistering && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                <input
+                  type="email"
+                  value={registerForm.email}
+                  onChange={(e) => setRegisterForm({...registerForm, email: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+            )}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
+              <input
+                type="password"
+                value={isRegistering ? registerForm.password : loginForm.password}
+                onChange={(e) => isRegistering
+                  ? setRegisterForm({...registerForm, password: e.target.value})
+                  : setLoginForm({...loginForm, password: e.target.value})
+                }
+                onKeyPress={(e) => e.key === 'Enter' && (isRegistering ? handleRegister() : handleLogin())}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <button
+              onClick={isRegistering ? handleRegister : handleLogin}
+              className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              {isRegistering ? 'Register' : 'Login'}
+            </button>
+          </div>
+          <button
+            onClick={() => setIsRegistering(!isRegistering)}
+            className="w-full mt-4 text-blue-600 hover:text-blue-700"
+          >
+            {isRegistering ? 'Already have an account? Login' : 'Need an account? Register'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!selectedProject) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-8">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex justify-between items-center mb-8">
+            <h1 className="text-4xl font-bold text-gray-800">My Projects</h1>
+            <div className="flex gap-4">
+              <span className="text-gray-700 flex items-center gap-2">
+                <User size={20} />
+                {currentUser.username}
+              </span>
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+              >
+                <LogOut size={18} />
+                Logout
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {projects.map(project => (
+              <div
+                key={project.id}
+                onClick={() => setSelectedProject(project)}
+                className="bg-white rounded-lg shadow-lg p-6 cursor-pointer hover:shadow-xl transition-shadow"
+              >
+                <h3 className="text-xl font-bold text-gray-800 mb-2">{project.name}</h3>
+                <p className="text-gray-600 mb-4">{project.description}</p>
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                  <Users size={16} />
+                  {project.members.length} members
+                </div>
+              </div>
+            ))}
+            
+            <button
+              onClick={() => setShowProjectModal(true)}
+              className="bg-white rounded-lg shadow-lg p-6 border-2 border-dashed border-gray-300 hover:border-blue-500 hover:bg-blue-50 transition-colors flex items-center justify-center"
+            >
+              <div className="text-center">
+                <Plus size={48} className="mx-auto text-gray-400 mb-2" />
+                <p className="text-gray-600 font-medium">Create New Project</p>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        {showProjectModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md">
+              <h2 className="text-2xl font-bold mb-4">Create New Project</h2>
+              <div className="space-y-4">
+                <input
+                  value={projectForm.name}
+                  onChange={(e) => setProjectForm({...projectForm, name: e.target.value})}
+                  placeholder="Project Name"
+                  className="w-full px-4 py-2 border rounded-lg"
+                />
+                <textarea
+                  value={projectForm.description}
+                  onChange={(e) => setProjectForm({...projectForm, description: e.target.value})}
+                  placeholder="Project Description"
+                  className="w-full px-4 py-2 border rounded-lg"
+                  rows="3"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={createProject}
+                    className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700"
+                  >
+                    Create
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowProjectModal(false);
+                      setProjectForm({ name: '', description: '' });
+                    }}
+                    className="flex-1 bg-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-400"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-8">
+      <div className="max-w-7xl mx-auto">
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <button
+              onClick={() => setSelectedProject(null)}
+              className="text-blue-600 hover:text-blue-700 mb-2"
+            >
+              ← Back to Projects
+            </button>
+            <h1 className="text-4xl font-bold text-gray-800">{selectedProject.name}</h1>
+            <p className="text-gray-600">{selectedProject.description}</p>
+          </div>
+          <span className="text-gray-700 flex items-center gap-2">
+            <User size={20} />
+            {currentUser.username}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {selectedProject.boards.map(board => (
+            <div key={board.id} className="bg-white rounded-lg shadow-lg p-4">
+              <h3 className="text-xl font-bold text-gray-800 mb-4">{board.name}</h3>
+              
+              <div className="space-y-3 mb-4">
+                {board.tasks.map(task => (
+                  <div key={task.id} className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                    <h4 className="font-semibold text-gray-800 mb-1">{task.title}</h4>
+                    <p className="text-sm text-gray-600 mb-2">{task.description}</p>
+                    
+                    <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
+                      <span>Assigned: {users.find(u => u.id === task.assignedTo)?.username || 'Unassigned'}</span>
+                      <span className="flex items-center gap-1">
+                        <MessageSquare size={14} />
+                        {task.comments.length}
+                      </span>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          setSelectedTask({ ...task, boardId: board.id });
+                          setShowCommentModal(true);
+                        }}
+                        className="flex-1 bg-blue-500 text-white py-1 rounded text-sm hover:bg-blue-600"
+                      >
+                        <MessageSquare size={14} className="inline mr-1" />
+                        Comment
+                      </button>
+                      <button
+                        onClick={() => deleteTask(task.id, board.id)}
+                        className="bg-red-500 text-white px-2 py-1 rounded text-sm hover:bg-red-600"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+
+                    {board.id !== '3' && (
+                      <button
+                        onClick={() => {
+                          const nextBoardId = board.id === '1' ? '2' : '3';
+                          moveTask(task.id, board.id, nextBoardId);
+                        }}
+                        className="w-full mt-2 bg-gray-200 text-gray-700 py-1 rounded text-sm hover:bg-gray-300"
+                      >
+                        Move to {board.id === '1' ? 'In Progress' : 'Done'}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <button
+                onClick={() => setShowTaskModal(board.id)}
+                className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2"
+              >
+                <Plus size={20} />
+                Add Task
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {showTaskModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h2 className="text-2xl font-bold mb-4">Create New Task</h2>
+            <div className="space-y-4">
+              <input
+                value={taskForm.title}
+                onChange={(e) => setTaskForm({...taskForm, title: e.target.value})}
+                placeholder="Task Title"
+                className="w-full px-4 py-2 border rounded-lg"
+              />
+              <textarea
+                value={taskForm.description}
+                onChange={(e) => setTaskForm({...taskForm, description: e.target.value})}
+                placeholder="Task Description"
+                className="w-full px-4 py-2 border rounded-lg"
+                rows="3"
+              />
+              <select
+                value={taskForm.assignedTo}
+                onChange={(e) => setTaskForm({...taskForm, assignedTo: e.target.value})}
+                className="w-full px-4 py-2 border rounded-lg"
+              >
+                <option value="">Unassigned</option>
+                {users.map(user => (
+                  <option key={user.id} value={user.id}>{user.username}</option>
+                ))}
+              </select>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => addTask(showTaskModal)}
+                  className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700"
+                >
+                  Create
+                </button>
+                <button
+                  onClick={() => {
+                    setShowTaskModal(false);
+                    setTaskForm({ title: '', description: '', assignedTo: '' });
+                  }}
+                  className="flex-1 bg-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-400"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCommentModal && selectedTask && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[80vh] overflow-y-auto">
+            <h2 className="text-2xl font-bold mb-2">{selectedTask.title}</h2>
+            <p className="text-gray-600 mb-4">{selectedTask.description}</p>
+            
+            <h3 className="font-bold mb-2">Comments</h3>
+            <div className="space-y-2 mb-4">
+              {selectedTask.comments.map(comment => (
+                <div key={comment.id} className="bg-gray-50 p-3 rounded-lg">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-semibold text-sm">
+                      {users.find(u => u.id === comment.userId)?.username}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      {new Date(comment.createdAt).toLocaleString()}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-700">{comment.text}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="space-y-4">
+              <textarea
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                placeholder="Add a comment..."
+                className="w-full px-4 py-2 border rounded-lg"
+                rows="3"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={addComment}
+                  className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700"
+                >
+                  Add Comment
+                </button>
+                <button
+                  onClick={() => {
+                    setShowCommentModal(false);
+                    setSelectedTask(null);
+                    setCommentText('');
+                  }}
+                  className="flex-1 bg-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-400"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default ProjectManagementTool;
